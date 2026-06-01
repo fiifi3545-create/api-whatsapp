@@ -1,0 +1,82 @@
+# Render Blueprint for the Student Chatbot backend.
+# Connect this repo at https://dashboard.render.com/blueprints — Render reads
+# this file, pre-fills the service settings, and prompts only for the secret
+# env vars marked `sync: false`.
+
+services:
+  - type: web
+    name: student-chatbot-backend
+    runtime: docker
+    plan: free
+    region: frankfurt          # Closest Render region to Ghana.
+    branch: main
+    rootDir: backend           # Repo has backend/ + mobile/; only backend deploys.
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true           # Push to main → auto-redeploy.
+
+    envVars:
+      # ----- Non-secret config (committed to YAML is fine) -----
+      - key: FLASK_ENV
+        value: production
+      - key: JWT_TTL_DAYS
+        value: "30"
+      # Dev-only OTP echo. Flip to "false" once Hubtel SMS or WhatsApp template
+      # is wired up for production OTP delivery.
+      - key: OTP_ECHO_IN_RESPONSE
+        value: "true"
+      - key: CHATBOT_NLP_BACKEND
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: CHATBOT_CONFIDENCE_THRESHOLD
+        value: "0.6"
+      - key: CHATBOT_FALLBACK_CONTACT
+        value: Please contact the Student Affairs office at studentaffairs@university.edu
+      - key: WHATSAPP_BOT_NUMBER
+        value: "233533431086"
+      - key: WHATSAPP_API_BASE
+        value: https://graph.facebook.com/v20.0
+
+      # ----- Auto-generated (Render mints a random value once) -----
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+
+      # ----- Secrets — Render prompts for these in the dashboard -----
+      # Copy them straight from backend/.env on your laptop.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AGORA_APP_ID
+        sync: false
+      - key: AGORA_APP_CERTIFICATE
+        sync: false
+      - key: AGORA_CHAT_APP_KEY
+        sync: false
+      - key: AGORA_CHAT_REST_HOST
+        sync: false
+      - key: AGORA_CHAT_APP_TOKEN
+        sync: false
+      - key: AGORA_CHAT_WEBHOOK_SECRET
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: META_APP_SECRET
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: HUBTEL_CLIENT_ID
+        sync: false
+      - key: HUBTEL_CLIENT_SECRET
+        sync: false
+      - key: HUBTEL_SENDER_ID
+        sync: false
+      # Firebase Cloud Messaging service-account creds: leave empty for the
+      # free tier unless you've wired Firebase. Backend degrades to no-op push.
+      - key: FCM_PROJECT_ID
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        sync: false

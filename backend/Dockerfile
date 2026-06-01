@@ -13,4 +13,7 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "wsgi:app"]
+# Shell form so $PORT expands. Render injects PORT at runtime; falls back to
+# 8080 for local `docker run`. --timeout 120 accommodates Gemini LLM calls
+# that can take 20-40s under load.
+CMD gunicorn --bind 0.0.0.0:${PORT:-8080} --workers 2 --threads 4 --timeout 120 wsgi:app
