@@ -1,0 +1,33 @@
+# Top-level ignores for the Student Chatbot project.
+# Backend has its own .gitignore (Python venv, __pycache__, .env).
+# Mobile has its own .gitignore (build/, .dart_tool/, etc.).
+# This file covers workspace-level junk that doesn't belong in either subdir.
+
+# Claude Code workspace settings (per-developer, not for git)
+.claude/
+
+# IDEs / editors
+.vscode/
+.idea/
+*.iml
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Stray scratch files
+Untitled
+*.swp
+*.bak
+
+# Render deploy artifacts (in case render-build.sh is ever run locally)
+.render/
+
+# Safety net for secrets — even though backend/.env is already ignored
+# by backend/.gitignore, double-protect at the repo root.
+**/.env
+**/.env.local
+**/service-account*.json
+**/google-services.json
+**/GoogleService-Info.plist

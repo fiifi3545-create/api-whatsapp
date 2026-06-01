@@ -1,0 +1,78 @@
+{
+  "language_code": "en",
+  "default_response_platform": "PLATFORM_UNSPECIFIED",
+  "intents": [
+    {
+      "display_name": "exam.schedule",
+      "training_phrases": [
+        "when is the exam",
+        "when are the exams",
+        "exam timetable",
+        "when is the exam timetable out",
+        "when do exams start",
+        "examination schedule",
+        "when will the final exam be held",
+        "do you have the exam dates",
+        "where can I find the exam timetable"
+      ],
+      "messages": ["I can help you find the exam timetable."]
+    },
+    {
+      "display_name": "registration.info",
+      "training_phrases": [
+        "how do I register for courses",
+        "course registration",
+        "when does registration open",
+        "registration deadline",
+        "how to register",
+        "I need to register for next semester",
+        "registration process",
+        "what is the registration deadline"
+      ],
+      "messages": ["Here is information about course registration."]
+    },
+    {
+      "display_name": "library.hours",
+      "training_phrases": [
+        "library hours",
+        "when is the library open",
+        "what time does the library close",
+        "is the library open on Sunday",
+        "library opening times",
+        "library schedule"
+      ],
+      "messages": ["Here are the library opening hours."]
+    },
+    {
+      "display_name": "fees.payment",
+      "training_phrases": [
+        "how do I pay my fees",
+        "tuition fees",
+        "fees payment",
+        "how to pay tuition",
+        "fee payment methods",
+        "where can I pay my fees",
+        "is online fee payment available"
+      ],
+      "messages": ["Here is how to pay your fees."]
+    },
+    {
+      "display_name": "transcripts.request",
+      "training_phrases": [
+        "how do I request a transcript",
+        "I need an official transcript",
+        "transcript request",
+        "how long does a transcript take",
+        "where can I get my transcript",
+        "request academic transcript"
+      ],
+      "messages": ["Here is how to request a transcript."]
+    }
+  ],
+  "import_notes": [
+    "Programmatic import: run `python backend/scripts/import_dialogflow_intents.py` after setting DIALOGFLOW_PROJECT_ID and GOOGLE_APPLICATION_CREDENTIALS. The script is idempotent (create-or-update by display_name) and pulls answer text from faqs.json for each intent's fulfillment_text.",
+    "Dry-run: add --dry-run to print the plan without contacting GCP (works offline; cannot distinguish create vs update without listing the agent).",
+    "After import, set DIALOGFLOW_PROJECT_ID and GOOGLE_APPLICATION_CREDENTIALS in .env so the runtime DialogflowClient switches off the keyword stub.",
+    "Keep this file in sync with knowledge_base/faqs.json — every intent here must have a matching faqs.json answer and vice versa. The importer (and tests/test_dialogflow_import.py::test_repo_kb_and_intents_are_in_sync) enforces this."
+  ]
+}

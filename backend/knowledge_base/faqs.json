@@ -1,0 +1,22 @@
+[
+  {
+    "intent": "exam.schedule",
+    "answer": "Examination timetables are published two weeks before the start of each exam period on the Student Portal under Academics > Examinations. If you cannot find your paper, contact your faculty office."
+  },
+  {
+    "intent": "registration.info",
+    "answer": "Course registration opens at the start of each semester and runs for two weeks. Log in to the Student Portal, select your courses, and confirm with your academic advisor before the deadline."
+  },
+  {
+    "intent": "library.hours",
+    "answer": "The main library is open Monday to Friday 08:00–22:00, Saturday 09:00–18:00, and Sunday 12:00–18:00. Hours are extended during exam periods."
+  },
+  {
+    "intent": "fees.payment",
+    "answer": "Tuition fees can be paid via bank transfer, the Student Portal payment gateway, or in person at the Bursary. Keep your receipt and upload it to the portal to clear your account."
+  },
+  {
+    "intent": "transcripts.request",
+    "answer": "Request an official transcript through the Student Portal under Records > Transcripts. Processing takes 5–7 working days and costs the standard transcript fee."
+  }
+]
