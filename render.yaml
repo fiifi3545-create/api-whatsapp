@@ -10,12 +10,10 @@ services:
     plan: free
     region: frankfurt          # Closest Render region to Ghana.
     branch: main
-    rootDir: backend           # Repo has backend/ + mobile/; only backend deploys.
-    # Both paths below are relative to the REPO ROOT, not rootDir. (Render's
-    # docs are a bit unclear on this — first deploy failed with "no such file
-    # or directory" until we made these explicit.)
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    # rootDir is enough — Render auto-finds <rootDir>/Dockerfile and uses
+    # <rootDir> as the build context. Explicit dockerfilePath/dockerContext
+    # collided with this default and broke the build twice; removed.
+    rootDir: backend
     healthCheckPath: /health
     autoDeploy: true           # Push to main → auto-redeploy.
 
