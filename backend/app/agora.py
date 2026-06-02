@@ -247,39 +247,78 @@ class AgoraChatRestClient:
                     username, resp.status_code, resp.text[:200])
         return False
 
+    def _token_bases(self) -> list[str]:
+        """Possible REST base URLs to try for the /token endpoint.
+
+        The /token endpoint lives on Agora's standard REST API host
+        (a{region}.chat.agora.io). Some deployments configure
+        AGORA_CHAT_REST_HOST to a msync-api-* host (used for message-sync
+        operations); that host accepts /users, /messages, /chatgroups but
+        responds to /token with a sentinel "connect success" body. Try the
+        derived standard host first, then fall back to whatever was
+        configured.
+        """
+        org, app = self._ensure()
+        configured = self.config.chat_rest_host.strip()
+        candidates: list[str] = []
+        # Derive a{region} from msync-api-{region}.chat.agora.io if applicable
+        if configured.startswith("msync-api-"):
+            tail = configured[len("msync-api-"):]
+            derived = "a" + tail
+            candidates.append(f"https://{derived}/{org}/{app}")
+        candidates.append(f"https://{configured}/{org}/{app}")
+        # Dedup preserving order
+        seen: set[str] = set()
+        return [c for c in candidates if not (c in seen or seen.add(c))]
+
     def mint_user_token(self, username: str, ttl: int = 86400) -> tuple[str | None, dict]:
         """Mint a Chat user-token via Agora's REST /token endpoint.
 
-        Returns (token_or_None, debug_info). debug_info always carries the
-        URL, request body, status, and (truncated) response so failures are
+        Returns (token_or_None, debug_info). debug_info carries the URL(s)
+        attempted, status, and (truncated) response so failures are
         observable from the caller without grep'ing Render logs.
         """
+        self._ensure()  # validate config / raise AgoraNotConfigured
         username = _sanitize_chat_username(username)
-        url = f"{self._base()}/token"
         body = {"grant_type": "agent", "username": username, "ttl": ttl}
-        info: dict = {"url": url, "body": body}
-        try:
-            resp = requests.post(
-                url, headers=self._headers(), json=body, timeout=self.timeout,
-            )
-        except requests.RequestException as exc:
-            info["error"] = f"transport: {exc}"
-            log.warning("Agora Chat mint_user_token transport error for %s: %s", username, exc)
-            return None, info
-        info["status"] = resp.status_code
-        info["response"] = resp.text[:400]
-        if not resp.ok:
-            log.warning("Agora Chat mint_user_token %s: %s",
-                        resp.status_code, resp.text[:200])
-            return None, info
-        try:
-            token = (resp.json().get("access_token") or "").strip() or None
-        except ValueError:
-            info["error"] = "non-json response"
-            return None, info
-        if not token:
-            info["error"] = "access_token missing in response"
-        return token, info
+        attempts: list[dict] = []
+        for base in self._token_bases():
+            url = f"{base}/token"
+            attempt: dict = {"url": url}
+            try:
+                resp = requests.post(
+                    url, headers=self._headers(), json=body, timeout=self.timeout,
+                )
+            except requests.RequestException as exc:
+                attempt["error"] = f"transport: {exc}"
+                attempts.append(attempt)
+                continue
+            attempt["status"] = resp.status_code
+            attempt["response"] = resp.text[:400]
+            # Skip "connect success" sentinel — endpoint doesn't exist on this host
+            if resp.status_code == 200 and resp.text.strip().lower() == "connect success":
+                attempt["error"] = "host does not serve /token (connect-success sentinel)"
+                attempts.append(attempt)
+                continue
+            if not resp.ok:
+                attempt["error"] = "non-2xx"
+                attempts.append(attempt)
+                continue
+            try:
+                token = (resp.json().get("access_token") or "").strip() or None
+            except ValueError:
+                attempt["error"] = "non-json response"
+                attempts.append(attempt)
+                continue
+            if not token:
+                attempt["error"] = "access_token missing in response"
+                attempts.append(attempt)
+                continue
+            log.info("Agora Chat mint_user_token %s OK via %s", username, url)
+            return token, {"body": body, "attempts": attempts + [attempt]}
+        log.warning("Agora Chat mint_user_token %s failed across hosts: %s",
+                    username, attempts)
+        return None, {"body": body, "attempts": attempts}
 
     def send_text(self, *, from_user: str, to_user: str, text: str) -> bool:
         """Post a 1:1 text message as `from_user`. Used by the bot to reply."""
