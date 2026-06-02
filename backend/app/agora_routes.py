@@ -146,4 +146,13 @@ def chat_token():
         result = _client().chat_user_token(user_id=user_id, ttl=ttl)
     except AgoraNotConfigured as exc:
         return jsonify(error=str(exc)), 503
+
+    chat_rest = current_app.extensions.get("agora_chat_rest")
+    if chat_rest is not None:
+        try:
+            if chat_rest.config.chat_is_configured and chat_rest.config.chat_app_token:
+                chat_rest.ensure_user(user_id)
+        except Exception as exc:
+            log.warning("ensure_user(%s) failed: %s", user_id, exc)
+
     return jsonify(result)
