@@ -148,11 +148,26 @@ def chat_token():
         return jsonify(error=str(exc)), 503
 
     chat_rest = current_app.extensions.get("agora_chat_rest")
+    register_status: dict | None = None
     if chat_rest is not None:
-        try:
-            if chat_rest.config.chat_is_configured and chat_rest.config.chat_app_token:
-                chat_rest.ensure_user(user_id)
-        except Exception as exc:
-            log.warning("ensure_user(%s) failed: %s", user_id, exc)
+        cfg = chat_rest.config
+        if not (cfg.chat_is_configured and cfg.chat_app_token):
+            register_status = {
+                "ok": False,
+                "reason": "chat_rest_not_configured",
+                "chat_is_configured": cfg.chat_is_configured,
+                "has_app_token": bool(cfg.chat_app_token),
+            }
+            log.warning("chat-token: %s", register_status)
+        else:
+            try:
+                ok = chat_rest.ensure_user(user_id)
+                register_status = {"ok": True, "newly_created": ok}
+                log.info("chat-token: ensure_user(%s) newly_created=%s", user_id, ok)
+            except Exception as exc:
+                register_status = {"ok": False, "reason": "exception", "error": str(exc)}
+                log.warning("ensure_user(%s) raised: %s", user_id, exc)
 
+    if register_status is not None:
+        result = {**result, "_register_status": register_status}
     return jsonify(result)

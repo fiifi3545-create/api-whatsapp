@@ -64,10 +64,21 @@ class AgoraConfig:
 
     @classmethod
     def from_env(cls) -> "AgoraConfig":
+        # Agora Chat's app key has the literal shape "<org>#<app>" but some
+        # hosting UIs (Render, at least) silently strip `#` from env var
+        # values. Allow the org and app halves to be supplied separately;
+        # prefer those when both are set, fall back to the combined value
+        # for local dev.
+        org = os.environ.get("AGORA_CHAT_ORG_NAME", "").strip()
+        app = os.environ.get("AGORA_CHAT_APP_NAME", "").strip()
+        if org and app:
+            chat_app_key = f"{org}#{app}"
+        else:
+            chat_app_key = os.environ.get("AGORA_CHAT_APP_KEY", "").strip()
         return cls(
             app_id=os.environ.get("AGORA_APP_ID", "").strip(),
             app_certificate=os.environ.get("AGORA_APP_CERTIFICATE", "").strip(),
-            chat_app_key=os.environ.get("AGORA_CHAT_APP_KEY", "").strip(),
+            chat_app_key=chat_app_key,
             chat_rest_host=os.environ.get("AGORA_CHAT_REST_HOST", "").strip(),
             chat_app_token=os.environ.get("AGORA_CHAT_APP_TOKEN", "").strip(),
         )
@@ -227,11 +238,13 @@ class AgoraChatRestClient:
             log.warning("Agora Chat register call failed for %s: %s", username, exc)
             return False
         if resp.status_code in (200, 201):
+            log.info("Agora Chat register %s: created", username)
             return True
         if resp.status_code == 400 and "duplicate" in resp.text.lower():
+            log.info("Agora Chat register %s: already exists", username)
             return False
-        log.warning("Agora Chat register unexpected response %s: %s",
-                    resp.status_code, resp.text[:200])
+        log.warning("Agora Chat register %s unexpected response %s: %s",
+                    username, resp.status_code, resp.text[:200])
         return False
 
     def send_text(self, *, from_user: str, to_user: str, text: str) -> bool:
