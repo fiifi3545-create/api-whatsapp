@@ -274,51 +274,61 @@ class AgoraChatRestClient:
     def mint_user_token(self, username: str, ttl: int = 86400) -> tuple[str | None, dict]:
         """Mint a Chat user-token via Agora's REST /token endpoint.
 
-        Returns (token_or_None, debug_info). debug_info carries the URL(s)
-        attempted, status, and (truncated) response so failures are
-        observable from the caller without grep'ing Render logs.
+        Tries multiple known body shapes since Agora's docs are inconsistent
+        about field names (username vs userName vs userId, presence of ttl).
+        Returns (token_or_None, debug_info).
         """
-        self._ensure()  # validate config / raise AgoraNotConfigured
+        self._ensure()
         username = _sanitize_chat_username(username)
-        body = {"grant_type": "agent", "username": username, "ttl": ttl}
+        # Body shapes documented across Agora Chat versions / regions.
+        bodies = [
+            {"grant_type": "agent", "username": username, "ttl": ttl},
+            {"grant_type": "agent", "username": username},
+            {"grant_type": "agent", "userName": username, "ttl": ttl},
+            {"grant_type": "agent", "userName": username},
+            {"grant_type": "agent", "userid": username, "ttl": ttl},
+            {"grant_type": "inherit", "username": username, "ttl": ttl},
+        ]
         attempts: list[dict] = []
         for base in self._token_bases():
             url = f"{base}/token"
-            attempt: dict = {"url": url}
-            try:
-                resp = requests.post(
-                    url, headers=self._headers(), json=body, timeout=self.timeout,
-                )
-            except requests.RequestException as exc:
-                attempt["error"] = f"transport: {exc}"
-                attempts.append(attempt)
-                continue
-            attempt["status"] = resp.status_code
-            attempt["response"] = resp.text[:400]
-            # Skip "connect success" sentinel — endpoint doesn't exist on this host
-            if resp.status_code == 200 and resp.text.strip().lower() == "connect success":
-                attempt["error"] = "host does not serve /token (connect-success sentinel)"
-                attempts.append(attempt)
-                continue
-            if not resp.ok:
-                attempt["error"] = "non-2xx"
-                attempts.append(attempt)
-                continue
-            try:
-                token = (resp.json().get("access_token") or "").strip() or None
-            except ValueError:
-                attempt["error"] = "non-json response"
-                attempts.append(attempt)
-                continue
-            if not token:
-                attempt["error"] = "access_token missing in response"
-                attempts.append(attempt)
-                continue
-            log.info("Agora Chat mint_user_token %s OK via %s", username, url)
-            return token, {"body": body, "attempts": attempts + [attempt]}
-        log.warning("Agora Chat mint_user_token %s failed across hosts: %s",
-                    username, attempts)
-        return None, {"body": body, "attempts": attempts}
+            for body in bodies:
+                attempt: dict = {"url": url, "body": body}
+                try:
+                    resp = requests.post(
+                        url, headers=self._headers(), json=body, timeout=self.timeout,
+                    )
+                except requests.RequestException as exc:
+                    attempt["error"] = f"transport: {exc}"
+                    attempts.append(attempt)
+                    continue
+                attempt["status"] = resp.status_code
+                attempt["response"] = resp.text[:300]
+                if resp.status_code == 200 and resp.text.strip().lower() == "connect success":
+                    attempt["error"] = "connect-success sentinel"
+                    attempts.append(attempt)
+                    break  # this whole host doesn't serve /token, skip remaining bodies
+                if not resp.ok:
+                    attempt["error"] = "non-2xx"
+                    attempts.append(attempt)
+                    continue
+                try:
+                    token = (resp.json().get("access_token") or "").strip() or None
+                except ValueError:
+                    attempt["error"] = "non-json"
+                    attempts.append(attempt)
+                    continue
+                if not token:
+                    attempt["error"] = "no access_token in response"
+                    attempts.append(attempt)
+                    continue
+                log.info("Agora Chat mint_user_token %s OK via %s body=%s",
+                         username, url, body)
+                attempts.append({**attempt, "ok": True})
+                return token, {"attempts": attempts}
+        log.warning("Agora Chat mint_user_token %s exhausted: %d attempts",
+                    username, len(attempts))
+        return None, {"attempts": attempts}
 
     def send_text(self, *, from_user: str, to_user: str, text: str) -> bool:
         """Post a 1:1 text message as `from_user`. Used by the bot to reply."""
