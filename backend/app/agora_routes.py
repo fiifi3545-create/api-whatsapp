@@ -172,13 +172,14 @@ def chat_token():
             # Local JWT minting fails with code 202 when AGORA_APP_ID and the
             # Chat AppKey are from different Agora projects. Prefer a REST-
             # minted token so Agora signs it themselves.
-            rest_token = chat_rest.mint_user_token(user_id, ttl=ttl)
+            rest_token, rest_info = chat_rest.mint_user_token(user_id, ttl=ttl)
             if rest_token:
                 result = {**result, "token": rest_token}
                 token_source = "rest_minted"
                 log.info("chat-token: REST-minted token for %s", user_id)
             else:
-                log.warning("chat-token: REST mint failed for %s, returning local JWT", user_id)
+                register_status = {**(register_status or {}), "rest_mint_debug": rest_info}
+                log.warning("chat-token: REST mint failed for %s: %s", user_id, rest_info)
 
     if register_status is not None:
         result = {**result, "_register_status": register_status, "_token_source": token_source}

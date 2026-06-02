@@ -247,33 +247,39 @@ class AgoraChatRestClient:
                     username, resp.status_code, resp.text[:200])
         return False
 
-    def mint_user_token(self, username: str, ttl: int = 86400) -> str | None:
+    def mint_user_token(self, username: str, ttl: int = 86400) -> tuple[str | None, dict]:
         """Mint a Chat user-token via Agora's REST /token endpoint.
 
-        Use this instead of signing a JWT locally when the local App ID +
-        App Certificate aren't bound to the same Agora project as the Chat
-        AppKey (login would fail with code 202 "User authentication failed"
-        because the signature can't be verified against this project).
-        Returns the token string on success, None on any failure.
+        Returns (token_or_None, debug_info). debug_info always carries the
+        URL, request body, status, and (truncated) response so failures are
+        observable from the caller without grep'ing Render logs.
         """
         username = _sanitize_chat_username(username)
         url = f"{self._base()}/token"
         body = {"grant_type": "agent", "username": username, "ttl": ttl}
+        info: dict = {"url": url, "body": body}
         try:
             resp = requests.post(
                 url, headers=self._headers(), json=body, timeout=self.timeout,
             )
         except requests.RequestException as exc:
-            log.warning("Agora Chat mint_user_token failed for %s: %s", username, exc)
-            return None
+            info["error"] = f"transport: {exc}"
+            log.warning("Agora Chat mint_user_token transport error for %s: %s", username, exc)
+            return None, info
+        info["status"] = resp.status_code
+        info["response"] = resp.text[:400]
         if not resp.ok:
             log.warning("Agora Chat mint_user_token %s: %s",
                         resp.status_code, resp.text[:200])
-            return None
+            return None, info
         try:
-            return (resp.json().get("access_token") or "").strip() or None
+            token = (resp.json().get("access_token") or "").strip() or None
         except ValueError:
-            return None
+            info["error"] = "non-json response"
+            return None, info
+        if not token:
+            info["error"] = "access_token missing in response"
+        return token, info
 
     def send_text(self, *, from_user: str, to_user: str, text: str) -> bool:
         """Post a 1:1 text message as `from_user`. Used by the bot to reply."""
