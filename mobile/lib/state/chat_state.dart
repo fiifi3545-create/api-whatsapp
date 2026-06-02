@@ -84,13 +84,18 @@ class ChatState extends ChangeNotifier {
     }
   }
 
-  Future<void> sendToBot(String text) async {
-    final msg = ag.ChatMessage.createTxtSendMessage(
-      targetId: 'bot',
-      content: text,
-    );
-    final sent = await _session.chatManager.sendMessage(msg);
-    _appendFromAgora(sent, viewerUserId: _session.currentUserId);
+  /// Send a message to the AI bot.
+  ///
+  /// Bot conversations don't go through Agora Chat — the backend route
+  /// `POST /api/users/<id>/chat` runs the message through ChatbotEngine
+  /// (Gemini under the current config) and returns the inbound + outbound
+  /// pair in one round-trip. We append both to local state so the screen
+  /// updates immediately without waiting for any SDK listener.
+  Future<void> sendToBot(String userId, String text) async {
+    final pair = await _api.sendChatMessage(userId, text);
+    final list = _bySessionKey.putIfAbsent(userId, () => []);
+    list.addAll(pair);
+    notifyListeners();
   }
 
   Future<void> sendToGroup({required String groupId, required String text}) async {

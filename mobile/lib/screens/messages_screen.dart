@@ -54,10 +54,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
   void _send() {
     final text = _input.text.trim();
     if (text.isEmpty) return;
+    final userId = context.read<Session>().userId;
+    if (userId == null) return;
     _input.clear();
-    context.read<ChatState>().sendToBot(text);
-    // Live append happens via ChatState's WS subscription; we just keep
-    // the scroll glued to the bottom as it fills in.
+    context.read<ChatState>().sendToBot(userId, text);
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
