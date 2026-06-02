@@ -149,6 +149,7 @@ def chat_token():
 
     chat_rest = current_app.extensions.get("agora_chat_rest")
     register_status: dict | None = None
+    token_source = "local_jwt"
     if chat_rest is not None:
         cfg = chat_rest.config
         if not (cfg.chat_is_configured and cfg.chat_app_token):
@@ -168,6 +169,17 @@ def chat_token():
                 register_status = {"ok": False, "reason": "exception", "error": str(exc)}
                 log.warning("ensure_user(%s) raised: %s", user_id, exc)
 
+            # Local JWT minting fails with code 202 when AGORA_APP_ID and the
+            # Chat AppKey are from different Agora projects. Prefer a REST-
+            # minted token so Agora signs it themselves.
+            rest_token = chat_rest.mint_user_token(user_id, ttl=ttl)
+            if rest_token:
+                result = {**result, "token": rest_token}
+                token_source = "rest_minted"
+                log.info("chat-token: REST-minted token for %s", user_id)
+            else:
+                log.warning("chat-token: REST mint failed for %s, returning local JWT", user_id)
+
     if register_status is not None:
-        result = {**result, "_register_status": register_status}
+        result = {**result, "_register_status": register_status, "_token_source": token_source}
     return jsonify(result)

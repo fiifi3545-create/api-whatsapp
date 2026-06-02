@@ -247,6 +247,34 @@ class AgoraChatRestClient:
                     username, resp.status_code, resp.text[:200])
         return False
 
+    def mint_user_token(self, username: str, ttl: int = 86400) -> str | None:
+        """Mint a Chat user-token via Agora's REST /token endpoint.
+
+        Use this instead of signing a JWT locally when the local App ID +
+        App Certificate aren't bound to the same Agora project as the Chat
+        AppKey (login would fail with code 202 "User authentication failed"
+        because the signature can't be verified against this project).
+        Returns the token string on success, None on any failure.
+        """
+        username = _sanitize_chat_username(username)
+        url = f"{self._base()}/token"
+        body = {"grant_type": "agent", "username": username, "ttl": ttl}
+        try:
+            resp = requests.post(
+                url, headers=self._headers(), json=body, timeout=self.timeout,
+            )
+        except requests.RequestException as exc:
+            log.warning("Agora Chat mint_user_token failed for %s: %s", username, exc)
+            return None
+        if not resp.ok:
+            log.warning("Agora Chat mint_user_token %s: %s",
+                        resp.status_code, resp.text[:200])
+            return None
+        try:
+            return (resp.json().get("access_token") or "").strip() or None
+        except ValueError:
+            return None
+
     def send_text(self, *, from_user: str, to_user: str, text: str) -> bool:
         """Post a 1:1 text message as `from_user`. Used by the bot to reply."""
         url = f"{self._base()}/messages/users"
