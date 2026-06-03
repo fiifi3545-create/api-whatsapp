@@ -11,6 +11,7 @@ import jwt
 from flask import Blueprint, current_app, g, jsonify, request
 
 from .hubtel import HubtelClient
+from .whatsapp import WhatsAppClient
 
 log = logging.getLogger(__name__)
 
@@ -124,6 +125,60 @@ def _otp_store() -> OtpStore:
     return current_app.extensions["otp_store"]
 
 
+def _deliver_otp_whatsapp(phone: str, code: str) -> bool:
+    """Send the OTP via an approved Meta Authentication template.
+
+    Authentication templates put the code in both the body and a copy-code
+    button, so we pass `code` to both. Returns True only if Meta accepted the
+    send (credentials + template must be configured); any failure returns
+    False so the caller can fall back / surface `delivered: false`.
+    """
+    try:
+        client = WhatsAppClient.from_app(current_app)
+        result = client.send_template(
+            to=phone,
+            template_name=current_app.config.get("WHATSAPP_OTP_TEMPLATE", "otp_code"),
+            language=current_app.config.get("WHATSAPP_OTP_LANGUAGE", "en"),
+            body_params=[code],
+            button_otp=code,
+        )
+        return result is not None
+    except Exception:
+        log.warning("WhatsApp OTP send failed for %s", phone, exc_info=True)
+        return False
+
+
+def _deliver_otp_sms(phone: str, code: str) -> bool:
+    """Send the OTP as a plain SMS via Hubtel. Best-effort (see request_otp)."""
+    try:
+        sms = HubtelClient.from_app(current_app)
+        result = sms.send_sms(
+            to=phone,
+            content=f"Your verification code is {code}. It expires in 5 minutes.",
+        )
+        return result is not None
+    except Exception:
+        log.warning("Hubtel SMS send failed for %s", phone, exc_info=True)
+        return False
+
+
+def _deliver_otp(phone: str, code: str) -> bool:
+    """Deliver the OTP over the channel(s) named by OTP_DELIVERY_CHANNEL.
+
+    "whatsapp" → Meta template, "sms" → Hubtel, "both" → try each.
+    Returns True if at least one channel accepted the message. Delivery is
+    best-effort: failures never abort signup (the OTP is in the store and, in
+    dev, echoed in the response / logged).
+    """
+    channel = current_app.config.get("OTP_DELIVERY_CHANNEL", "sms").strip().lower()
+    delivered = False
+    if channel in ("whatsapp", "both"):
+        delivered = _deliver_otp_whatsapp(phone, code) or delivered
+    if channel in ("sms", "both"):
+        delivered = _deliver_otp_sms(phone, code) or delivered
+    return delivered
+
+
 @bp.post("/request-otp")
 def request_otp():
     """Issue a one-time login code for a phone number.
@@ -156,22 +211,11 @@ def request_otp():
         return jsonify(error="phone_number is required"), 422
 
     code = _otp_store().issue(phone)
-    # Logged at WARNING so it shows in default log output. Once WhatsApp
-    # template delivery works in production, this should drop back to INFO.
+    # Logged at WARNING so it shows in default log output. Once OTP delivery
+    # works in production, this should drop back to INFO.
     log.warning("OTP for %s: %s", phone, code)
 
-    delivered = False
-    try:
-        sms = HubtelClient.from_app(current_app)
-        result = sms.send_sms(
-            to=phone,
-            content=f"Your verification code is {code}. It expires in 5 minutes.",
-        )
-        delivered = result is not None
-    except Exception:
-        # Don't fail signup if Hubtel is unreachable. OTP is still in the
-        # store and visible in the backend log, so dev can recover.
-        log.warning("Hubtel SMS send failed for %s", phone, exc_info=True)
+    delivered = _deliver_otp(phone, code)
 
     response: dict = {
         "sent": delivered,

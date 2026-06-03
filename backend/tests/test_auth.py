@@ -42,6 +42,74 @@ def test_request_otp_missing_phone_returns_422(client):
     assert resp.status_code == 422
 
 
+def test_request_otp_whatsapp_channel_delivers(client, app, monkeypatch):
+    app.config["OTP_DELIVERY_CHANNEL"] = "whatsapp"
+    captured = {}
+
+    def fake_send_template(self, to, template_name, language="en",
+                           body_params=None, button_otp=None):
+        captured.update(
+            to=to,
+            template_name=template_name,
+            body_params=body_params,
+            button_otp=button_otp,
+        )
+        return {"messages": [{"id": "wamid.test"}]}
+
+    monkeypatch.setattr("app.auth.WhatsAppClient.send_template", fake_send_template)
+    resp = client.post("/api/auth/request-otp", json={"phone_number": "233200000001"})
+    assert resp.status_code == 202
+    body = resp.get_json()
+    assert body["sent"] is True
+    # OTP carried in both the body param and the copy-code button.
+    assert captured["to"] == "233200000001"
+    assert captured["body_params"] == [body["otp"]]
+    assert captured["button_otp"] == body["otp"]
+
+
+def test_request_otp_whatsapp_failure_is_graceful(client, app, monkeypatch):
+    app.config["OTP_DELIVERY_CHANNEL"] = "whatsapp"
+
+    def boom(self, *a, **k):
+        raise RuntimeError("meta down")
+
+    monkeypatch.setattr("app.auth.WhatsAppClient.send_template", boom)
+    resp = client.post("/api/auth/request-otp", json={"phone_number": "233200000001"})
+    # Delivery failed but signup still succeeds; OTP is issued and echoed.
+    assert resp.status_code == 202
+    body = resp.get_json()
+    assert body["sent"] is False
+    assert len(body["otp"]) == 6
+
+
+def test_request_otp_sms_channel_delivers(client, app, monkeypatch):
+    app.config["OTP_DELIVERY_CHANNEL"] = "sms"
+    monkeypatch.setattr(
+        "app.auth.HubtelClient.send_sms",
+        lambda self, to, content: {"status": 0},
+    )
+    resp = client.post("/api/auth/request-otp", json={"phone_number": "233200000002"})
+    assert resp.status_code == 202
+    assert resp.get_json()["sent"] is True
+
+
+def test_request_otp_both_channels(client, app, monkeypatch):
+    app.config["OTP_DELIVERY_CHANNEL"] = "both"
+    calls = []
+    monkeypatch.setattr(
+        "app.auth.WhatsAppClient.send_template",
+        lambda self, **k: calls.append("wa") or {"messages": []},
+    )
+    monkeypatch.setattr(
+        "app.auth.HubtelClient.send_sms",
+        lambda self, to, content: calls.append("sms") or {"status": 0},
+    )
+    resp = client.post("/api/auth/request-otp", json={"phone_number": "233200000003"})
+    assert resp.status_code == 202
+    assert resp.get_json()["sent"] is True
+    assert calls == ["wa", "sms"]
+
+
 def test_verify_otp_happy_path_returns_jwt(client):
     issued = client.post(
         "/api/auth/request-otp", json={"phone_number": "233200000001"}

@@ -36,6 +36,11 @@ class Config:
     JWT_TTL_DAYS = int(os.environ.get("JWT_TTL_DAYS", "30"))
     OTP_ECHO_IN_RESPONSE = os.environ.get("OTP_ECHO_IN_RESPONSE", "true").lower() == "true"
 
+    # How the OTP is delivered: "sms" (Hubtel), "whatsapp" (Meta template), or
+    # "both". WhatsApp needs an approved Authentication template
+    # (WHATSAPP_OTP_TEMPLATE) plus the WABA credentials below.
+    OTP_DELIVERY_CHANNEL = os.environ.get("OTP_DELIVERY_CHANNEL", "sms").strip().lower()
+
     FCM_PROJECT_ID = os.environ.get("FCM_PROJECT_ID", "")
 
     WHATSAPP_BOT_NUMBER = os.environ.get("WHATSAPP_BOT_NUMBER", "")
