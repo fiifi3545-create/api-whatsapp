@@ -18,8 +18,10 @@ class NlpClient(Protocol):
 def make_nlp_client_from_env() -> NlpClient:
     """Pick the NLP backend based on CHATBOT_NLP_BACKEND.
 
-    "gemma"  → GemmaClient (local Ollama, intent classifier only).
-    "gemini" → GeminiClient (Google AI, direct-reply generation).
+    "gemma"      → GemmaClient (local Ollama, intent classifier only).
+    "gemini"     → GeminiClient (Google AI, direct-reply generation).
+    "openrouter" / "openai" → OpenRouterClient (OpenAI-compatible gateway,
+                   direct-reply generation).
     Anything else (or import failure) → DialogflowClient stub.
     """
     backend = os.environ.get("CHATBOT_NLP_BACKEND", "dialogflow").strip().lower()
@@ -35,6 +37,12 @@ def make_nlp_client_from_env() -> NlpClient:
             return GeminiClient()
         except Exception as exc:
             log.warning("Gemini backend requested but failed to initialise: %s", exc)
+    elif backend in ("openrouter", "openai"):
+        try:
+            from .openrouter import OpenRouterClient
+            return OpenRouterClient()
+        except Exception as exc:
+            log.warning("OpenRouter backend requested but failed to initialise: %s", exc)
     return DialogflowClient()
 
 

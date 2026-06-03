@@ -28,7 +28,9 @@ services:
       - key: OTP_ECHO_IN_RESPONSE
         value: "true"
       - key: CHATBOT_NLP_BACKEND
-        value: gemini
+        value: openrouter
+      - key: OPENROUTER_MODEL
+        value: openai/gpt-4o-mini
       - key: GEMINI_MODEL
         value: gemini-flash-latest
       - key: CHATBOT_CONFIDENCE_THRESHOLD
@@ -50,11 +52,22 @@ services:
       # Copy them straight from backend/.env on your laptop.
       - key: GEMINI_API_KEY
         sync: false
+      # OpenRouter (OpenAI-compatible) key — looks like sk-or-v1-...
+      # Set this in the Render dashboard; never commit the value.
+      - key: OPENROUTER_API_KEY
+        sync: false
       - key: AGORA_APP_ID
         sync: false
       - key: AGORA_APP_CERTIFICATE
         sync: false
+      # AGORA_CHAT_APP_KEY contains a literal `#` which Render's UI strips.
+      # Use these two halves instead — backend combines them as <org>#<app>.
+      # Leave AGORA_CHAT_APP_KEY empty in the dashboard; ORG/APP override it.
       - key: AGORA_CHAT_APP_KEY
+        sync: false
+      - key: AGORA_CHAT_ORG_NAME
+        sync: false
+      - key: AGORA_CHAT_APP_NAME
         sync: false
       - key: AGORA_CHAT_REST_HOST
         sync: false
